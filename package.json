@@ -1,0 +1,29 @@
+{
+  "name": "aws-utils",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "ts-node lib",
+    "aws-utils": "ts-node lib"
+  },
+  "dependencies": {
+    "@types/cli-progress": "^3.4.2",
+    "@types/yargs": "^15.0.4",
+    "aws-sdk": "^2.630.0",
+    "cli-progress": "^3.6.0",
+    "csv-stringify": "^5.3.6",
+    "dotenv": "^8.2.0",
+    "rambda": "^4.6.0",
+    "rambdax": "^3.6.0",
+    "ts-node": "^8.6.2",
+    "typescript": "^3.8.3",
+    "yargs": "^15.1.0"
+  },
+  "devDependencies": {
+    "@types/csv-stringify": "^3.1.0",
+    "@types/node": "^13.7.7",
+    "@types/ramda": "^0.26.43",
+    "prettier": "^1.19.1"
+  }
+}

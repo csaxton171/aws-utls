@@ -1,5 +1,5 @@
-import { EC2 } from "aws-sdk";
-import { partial } from "rambdax";
+import { EC2, RDS } from "aws-sdk";
+import { partial, anyTrue, groupBy } from "rambdax";
 
 export const getVpcs = async (ec2: EC2, filters: EC2.FilterList) => {
   return (await ec2.describeVpcs({ Filters: filters }).promise()).Vpcs || [];
@@ -10,7 +10,9 @@ const filterBy = (byField: string, values: string[]) => [
 ];
 export const filterByVpc = partial(filterBy, "vpc-id");
 export const filterBySnapshotId = partial(filterBy, "snapshot-id");
+export const filterByVolumeId = partial(filterBy, "volume-id");
 export const filterByInstanceId = partial(filterBy, "instance-id");
+export const filterByStatus = partial(filterBy, "status");
 
 export const getSubnets = async (ec2: EC2, filters: EC2.FilterList) => {
   return (
@@ -35,16 +37,27 @@ export const getInternetGateways = async (
   );
 };
 
-export const getEgressOnlyInternetGateways = async (
+export const getEgressOnlyInternetGateways = (
   ec2: EC2,
   filters: EC2.FilterList
 ) => {
-  return (
-    (
-      await ec2
-        .describeEgressOnlyInternetGateways({ Filters: filters })
-        .promise()
-    ).EgressOnlyInternetGateways || []
+  return applyPostFilters(
+    async fltrs =>
+      (
+        await ec2
+          .describeEgressOnlyInternetGateways(
+            fltrs?.length ? { Filters: fltrs } : {}
+          )
+          .promise()
+      ).EgressOnlyInternetGateways || [],
+    filters,
+    new Map([
+      [
+        "attachment.vpc-id",
+        (values, gw: EC2.EgressOnlyInternetGateway) =>
+          !!gw.Attachments?.find(a => values.includes(a.VpcId || ""))
+      ]
+    ])
   );
 };
 
@@ -122,6 +135,61 @@ export const getAddresses = async (ec2: EC2, filters: EC2.FilterList) => {
     (await ec2.describeAddresses({ Filters: filters }).promise()).Addresses ||
     []
   );
+};
+
+export const getRdsDBClusters = async (rds: RDS, filters: RDS.FilterList) => {
+  return (
+    (await rds.describeDBClusters({ Filters: filters }).promise()).DBClusters ||
+    []
+  );
+};
+
+export const getRdsDBInstances = async (rds: RDS, filters: RDS.FilterList) => {
+  return applyPostFilters(
+    async filters =>
+      (
+        await rds
+          .describeDBInstances({
+            Filters: filters
+          })
+          .promise()
+      ).DBInstances || [],
+    filters,
+    new Map([
+      [
+        "vpc-id",
+        (values, dbi: RDS.DBInstance) =>
+          values.includes(dbi.DBSubnetGroup?.VpcId || "")
+      ]
+    ])
+  );
+};
+
+const applyPostFilters = async <
+  FL extends EC2.FilterList | RDS.FilterList,
+  T extends object
+>(
+  queryFn: (filters: FL | undefined) => Promise<T[]>,
+  filters: FL,
+  postHandlers: Map<string, (postFilterValues: string[], c: T) => boolean>
+): Promise<T[]> => {
+  const valuesByName = (filters: FL, name: string): string[] => {
+    const result = filters.find(f => f.Name === name)?.Values || [];
+    return result;
+  };
+
+  const groupedFilters = groupBy(
+    f => ([...postHandlers.keys()].includes(f.Name!) ? "post" : "pre"),
+    filters
+  );
+
+  const postPredicates = [...postHandlers.entries()].map(([name, predicate]) =>
+    partial(predicate, valuesByName(filters as FL, name))
+  );
+
+  const results = await queryFn(groupedFilters.pre as FL);
+
+  return results.filter(r => anyTrue(...postPredicates.map(pp => pp(r))));
 };
 
 export const parseTagArguments = (values: string[]) =>

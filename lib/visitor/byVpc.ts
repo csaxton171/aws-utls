@@ -1,5 +1,5 @@
-import { Visitor, VisitResult } from "./index";
-import { EC2 } from "aws-sdk";
+import { Visitor, VisitResult, safeVisit } from "./index";
+import { EC2, RDS } from "aws-sdk";
 import {
   getAddresses,
   getEgressOnlyInternetGateways,
@@ -12,14 +12,16 @@ import {
   getSecurityGroups,
   getSnapshots,
   getSubnets,
+  getRdsDBClusters,
+  getRdsDBInstances,
   getVolumes,
   getVpcEndpoints,
   getVpcPeeringConnections,
   getVpcs,
   filterByVpc,
-  filterByInstanceId
+  filterByInstanceId,
+  filterByVolumeId
 } from "../common";
-import { performance } from "perf_hooks";
 
 export const visitByVpc = async (
   vpcId: string,
@@ -29,11 +31,13 @@ export const visitByVpc = async (
   const byVpc = filterByVpc([vpcId]);
   const byVpcAttachment = [{ Name: "attachment.vpc-id", Values: [vpcId] }];
   const ec2 = new EC2({ region: region || "eu-west-1" });
+  const rds = new RDS({ region: region || "eu-west-1" });
 
   const [vpc] = await getVpcs(ec2, byVpc);
   if (!vpc) {
     throw new Error(`unable to locate Vpc '${vpcId}'`);
   }
+
   const [
     subnets,
     routeTables,
@@ -63,9 +67,6 @@ export const visitByVpc = async (
   const [networkInterfaces, addresses] = await Promise.all([
     getNetworkInterfaces(ec2, byVpc),
     getAddresses(ec2, filterByInstanceId(instances.map(i => i.InstanceId!)))
-    // getAddresses(ec2, [
-    //   { Name: "instance-id", Values: instances.map(i => i.InstanceId!) }
-    // ])
   ]);
 
   const volumeIds = instances
@@ -73,7 +74,7 @@ export const visitByVpc = async (
     .map(bdm => bdm.Ebs)
     .map(ebs => ebs?.VolumeId || "")
     .filter(v => v);
-  const byVolumeIds = [{ Name: "volume-id", Values: volumeIds }];
+  const byVolumeIds = filterByVolumeId(volumeIds);
 
   const [volumes, snapshots] = await Promise.all([
     getVolumes(ec2, byVolumeIds),
@@ -105,35 +106,4 @@ export const visitByVpc = async (
       safeVisit(visitor)(addresses, visitor.visitAddresses)
     ])
   ).filter(res => res.func);
-};
-
-const safeVisit = (visitor: Visitor) => async <T>(
-  subject: T,
-  fn?: (subject: T) => Promise<void>,
-  label?: string
-) => {
-  const inferLabel = (fn: Function) => {
-    const match = /^\s*(?<funcName>[^\(.]+)/.exec(fn.toString());
-    return match?.groups?.funcName;
-  };
-  const result: { func?: string; duration: number; error?: Error } = {
-    func: label,
-    duration: 0
-  };
-  const start = performance.now();
-  try {
-    if (!fn) {
-      return result;
-    }
-    if (!result.func) {
-      result.func = inferLabel(fn);
-    }
-
-    await fn.call(visitor, subject);
-  } catch (err) {
-    result.error = err;
-  } finally {
-    result.duration = performance.now() - start;
-    return result;
-  }
 };

@@ -1,5 +1,8 @@
 import { EC2, RDS } from "aws-sdk";
-import { partial, partition, propEq } from "rambdax";
+import { partial, partition, propEq, curry } from "rambdax";
+
+export type GenericTag = { Key: string; Value: string };
+export type GenericTaggedResource = { tags: GenericTag[] };
 
 export const getVpcs = async (ec2: EC2, filters: EC2.FilterList) => {
   return (await ec2.describeVpcs({ Filters: filters }).promise()).Vpcs || [];
@@ -170,6 +173,20 @@ export const getRdsDBInstances = async (rds: RDS, filters: RDS.FilterList) => {
     ]
   );
 };
+
+export const withRdsTags = <T>(
+  rds: RDS,
+  getResourceArn: (args?: any) => string,
+  resources: T[]
+) =>
+  Promise.all(
+    resources.map(async res => {
+      const rtags = await rds
+        .listTagsForResource({ ResourceName: getResourceArn(res) })
+        .promise();
+      return { ...res, tags: (rtags.TagList as GenericTag[]) || [] };
+    })
+  );
 
 const applyPostFilters = async <
   FL extends EC2.FilterList | RDS.FilterList,

@@ -21,8 +21,10 @@ import {
   filterByVpc,
   filterByInstanceId,
   filterByVolumeId,
-  filterByRdsClusterId
+  filterByRdsClusterId,
+  withRdsTags
 } from "../common";
+import { prop } from "rambdax";
 
 export const visitByVpc = async (
   vpcId: string,
@@ -68,11 +70,15 @@ export const visitByVpc = async (
   const [networkInterfaces, addresses, rdsDbInstances] = await Promise.all([
     getNetworkInterfaces(ec2, byVpc),
     getAddresses(ec2, filterByInstanceId(instances.map(i => i.InstanceId!))),
-    getRdsDBInstances(rds, byVpc)
+    getRdsDBInstances(rds, byVpc).then(instances =>
+      withRdsTags(rds, prop("DBInstanceArn"), instances)
+    )
   ]);
 
   const [rdsDBClusters] = await Promise.all([
-    getRdsDBClusters(rds, [filterByRdsClusterId(rdsDbInstances)])
+    getRdsDBClusters(rds, [
+      filterByRdsClusterId(rdsDbInstances)
+    ]).then(clusters => withRdsTags(rds, prop("DBClusterArn"), clusters))
   ]);
 
   const volumeIds = instances
@@ -111,8 +117,8 @@ export const visitByVpc = async (
       safeVisit(visitor)(networkInterfaces, visitor.visitNetworkInterfaces),
       safeVisit(visitor)(addresses, visitor.visitAddresses),
 
-      safeVisit(visitor)(rdsDbInstances, visitor.visitRdsDBInstance),
-      safeVisit(visitor)(rdsDBClusters, visitor.visitRdsDBCluster)
+      safeVisit(visitor)(rdsDbInstances, visitor.visitRdsDBInstances),
+      safeVisit(visitor)(rdsDBClusters, visitor.visitRdsDBClusters)
     ])
   ).filter(res => res.func);
 };

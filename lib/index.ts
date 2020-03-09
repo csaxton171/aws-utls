@@ -5,7 +5,7 @@ dotenv.config();
 yargs
   .scriptName("aws-utils")
   .usage("$0 <cmd> [args]")
-  .commandDir("./commands", { extensions: ["ts"] })
+  .commandDir("./commands", { extensions: ["ts"], recurse: true })
   .wrap(120)
   .env("AWS_UTILS")
   .help().argv;

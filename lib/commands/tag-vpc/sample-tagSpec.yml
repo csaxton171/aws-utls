@@ -1,0 +1,7 @@
+tags:
+  - key: "ServiceName"
+    value: "some-service"
+  - key: "ServiceCatalogueId"
+    value: 666
+  - key: "Environment"
+    value: testies

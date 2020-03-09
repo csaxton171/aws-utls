@@ -1,5 +1,6 @@
 import { EC2, RDS } from "aws-sdk";
 import { performance } from "perf_hooks";
+import { GenericTaggedResource } from "../common";
 
 type vistSubjectFn<T> = (subject: T) => Promise<void>;
 
@@ -21,8 +22,10 @@ export interface Visitor {
   visitSnapshots?: vistSubjectFn<EC2.Snapshot[]>;
   visitNetworkInterfaces?: vistSubjectFn<EC2.NetworkInterface[]>;
   visitAddresses?: vistSubjectFn<EC2.Address[]>;
-  visitRdsDBCluster?: vistSubjectFn<RDS.DBCluster[]>;
-  visitRdsDBInstance?: vistSubjectFn<RDS.DBInstance[]>;
+  visitRdsDBClusters?: vistSubjectFn<(RDS.DBCluster & GenericTaggedResource)[]>;
+  visitRdsDBInstances?: vistSubjectFn<
+    (RDS.DBInstance & GenericTaggedResource)[]
+  >;
 }
 
 export type VisitResult = {

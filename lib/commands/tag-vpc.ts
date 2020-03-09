@@ -112,43 +112,43 @@ class TagCollectorVisitor {
     return [...this.collected];
   }
 
-  // visitVpc(vpc: EC2.Vpc) {
-  //   vpc?.VpcId &&
-  //     this.collected.push(toTagCollectionItem("Vpc", prop("VpcId"), vpc));
-  //   return Promise.resolve();
-  // }
-  // visitInstances(subjects: EC2.Instance[]) {
-  //   this.collected.push(
-  //     ...subjects.map(toTagCollectionItem("Instance")(prop("InstanceId")))
-  //   );
-  //   return Promise.resolve();
-  // }
-  // visitVolumes(subjects: EC2.Volume[]) {
-  //   this.collected.push(
-  //     ...subjects.map(toTagCollectionItem("Volume")(prop("VolumeId")))
-  //   );
-  //   return Promise.resolve();
-  // }
-  // visitSnapshots(subjects: EC2.Snapshot[]) {
-  //   this.collected.push(
-  //     ...subjects.map(toTagCollectionItem("Snapshot")(prop("SnapshotId")))
-  //   );
-  //   return Promise.resolve();
-  // }
-  // visitNetworkInterfaces(subjects: EC2.NetworkInterface[]) {
-  //   this.collected.push(
-  //     ...subjects.map(
-  //       toTagCollectionItem("NetworkInterface")(prop("NetworkInterfaceId"))
-  //     )
-  //   );
-  //   return Promise.resolve();
-  // }
-  // visitAddresses(subjects: EC2.Address[]) {
-  //   this.collected.push(
-  //     ...subjects.map(toTagCollectionItem("Address")(prop("AssociationId")))
-  //   );
-  //   return Promise.resolve();
-  // }
+  visitVpc(vpc: EC2.Vpc) {
+    vpc?.VpcId &&
+      this.collected.push(toTagCollectionItem("Vpc", prop("VpcId"), vpc));
+    return Promise.resolve();
+  }
+  visitInstances(subjects: EC2.Instance[]) {
+    this.collected.push(
+      ...subjects.map(toTagCollectionItem("Instance")(prop("InstanceId")))
+    );
+    return Promise.resolve();
+  }
+  visitVolumes(subjects: EC2.Volume[]) {
+    this.collected.push(
+      ...subjects.map(toTagCollectionItem("Volume")(prop("VolumeId")))
+    );
+    return Promise.resolve();
+  }
+  visitSnapshots(subjects: EC2.Snapshot[]) {
+    this.collected.push(
+      ...subjects.map(toTagCollectionItem("Snapshot")(prop("SnapshotId")))
+    );
+    return Promise.resolve();
+  }
+  visitNetworkInterfaces(subjects: EC2.NetworkInterface[]) {
+    this.collected.push(
+      ...subjects.map(
+        toTagCollectionItem("NetworkInterface")(prop("NetworkInterfaceId"))
+      )
+    );
+    return Promise.resolve();
+  }
+  visitAddresses(subjects: EC2.Address[]) {
+    this.collected.push(
+      ...subjects.map(toTagCollectionItem("Address")(prop("AssociationId")))
+    );
+    return Promise.resolve();
+  }
 
   visitSubnets(subjects: EC2.Subnet[]) {
     this.collected.push(

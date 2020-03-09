@@ -1,5 +1,5 @@
 import { EC2, RDS } from "aws-sdk";
-import { partial, groupBy, partition, propEq } from "rambdax";
+import { partial, partition, propEq } from "rambdax";
 
 export const getVpcs = async (ec2: EC2, filters: EC2.FilterList) => {
   return (await ec2.describeVpcs({ Filters: filters }).promise()).Vpcs || [];
@@ -13,6 +13,16 @@ export const filterBySnapshotId = partial(filterBy, "snapshot-id");
 export const filterByVolumeId = partial(filterBy, "volume-id");
 export const filterByInstanceId = partial(filterBy, "instance-id");
 export const filterByStatus = partial(filterBy, "status");
+
+export const filterByRdsClusterId = (dbInstances: RDS.DBInstance[]) => {
+  const clusterIds = dbInstances
+    .filter(dbi => dbi.DBClusterIdentifier)
+    .map(dbi => dbi.DBClusterIdentifier!);
+  return {
+    Name: "db-cluster-id",
+    Values: clusterIds.length ? clusterIds : ["no-db-cluster-specified"]
+  };
+};
 
 export const getSubnets = async (ec2: EC2, filters: EC2.FilterList) => {
   return (

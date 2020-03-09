@@ -20,7 +20,8 @@ import {
   getVpcs,
   filterByVpc,
   filterByInstanceId,
-  filterByVolumeId
+  filterByVolumeId,
+  filterByRdsClusterId
 } from "../common";
 
 export const visitByVpc = async (
@@ -64,9 +65,14 @@ export const visitByVpc = async (
     getInstances(ec2, byVpc)
   ]);
 
-  const [networkInterfaces, addresses] = await Promise.all([
+  const [networkInterfaces, addresses, rdsDbInstances] = await Promise.all([
     getNetworkInterfaces(ec2, byVpc),
-    getAddresses(ec2, filterByInstanceId(instances.map(i => i.InstanceId!)))
+    getAddresses(ec2, filterByInstanceId(instances.map(i => i.InstanceId!))),
+    getRdsDBInstances(rds, byVpc)
+  ]);
+
+  const [rdsDBClusters] = await Promise.all([
+    getRdsDBClusters(rds, [filterByRdsClusterId(rdsDbInstances)])
   ]);
 
   const volumeIds = instances
@@ -103,7 +109,10 @@ export const visitByVpc = async (
       safeVisit(visitor)(volumes, visitor.visitVolumes),
       safeVisit(visitor)(snapshots, visitor.visitSnapshots),
       safeVisit(visitor)(networkInterfaces, visitor.visitNetworkInterfaces),
-      safeVisit(visitor)(addresses, visitor.visitAddresses)
+      safeVisit(visitor)(addresses, visitor.visitAddresses),
+
+      safeVisit(visitor)(rdsDbInstances, visitor.visitRdsDBInstance),
+      safeVisit(visitor)(rdsDBClusters, visitor.visitRdsDBCluster)
     ])
   ).filter(res => res.func);
 };

@@ -1,5 +1,5 @@
 import { EC2, RDS } from "aws-sdk";
-import { partial, anyTrue, groupBy } from "rambdax";
+import { partial, groupBy, partition, propEq } from "rambdax";
 
 export const getVpcs = async (ec2: EC2, filters: EC2.FilterList) => {
   return (await ec2.describeVpcs({ Filters: filters }).promise()).Vpcs || [];
@@ -51,13 +51,11 @@ export const getEgressOnlyInternetGateways = (
           .promise()
       ).EgressOnlyInternetGateways || [],
     filters,
-    new Map([
-      [
-        "attachment.vpc-id",
-        (values, gw: EC2.EgressOnlyInternetGateway) =>
-          !!gw.Attachments?.find(a => values.includes(a.VpcId || ""))
-      ]
-    ])
+    [
+      "attachment.vpc-id",
+      (values, gw: EC2.EgressOnlyInternetGateway) =>
+        !!gw.Attachments?.find(a => values.includes(a.VpcId || ""))
+    ]
   );
 };
 
@@ -155,13 +153,11 @@ export const getRdsDBInstances = async (rds: RDS, filters: RDS.FilterList) => {
           .promise()
       ).DBInstances || [],
     filters,
-    new Map([
-      [
-        "vpc-id",
-        (values, dbi: RDS.DBInstance) =>
-          values.includes(dbi.DBSubnetGroup?.VpcId || "")
-      ]
-    ])
+    [
+      "vpc-id",
+      (values, dbi: RDS.DBInstance) =>
+        values.includes(dbi.DBSubnetGroup?.VpcId || "")
+    ]
   );
 };
 
@@ -171,25 +167,17 @@ const applyPostFilters = async <
 >(
   queryFn: (filters: FL | undefined) => Promise<T[]>,
   filters: FL,
-  postHandlers: Map<string, (postFilterValues: string[], c: T) => boolean>
+  postHandler: [string, (postFilterValues: string[], c: T) => boolean]
 ): Promise<T[]> => {
-  const valuesByName = (filters: FL, name: string): string[] => {
-    const result = filters.find(f => f.Name === name)?.Values || [];
-    return result;
-  };
-
-  const groupedFilters = groupBy(
-    f => ([...postHandlers.keys()].includes(f.Name!) ? "post" : "pre"),
+  const [postFilterName, postFilterPredicate] = postHandler;
+  const [[postFilter = { Values: [] }], preFilters] = partition(
+    propEq("Name", postFilterName),
     filters
   );
 
-  const postPredicates = [...postHandlers.entries()].map(([name, predicate]) =>
-    partial(predicate, valuesByName(filters as FL, name))
-  );
+  const results = await queryFn(preFilters as FL);
 
-  const results = await queryFn(groupedFilters.pre as FL);
-
-  return results.filter(r => anyTrue(...postPredicates.map(pp => pp(r))));
+  return results.filter(partial(postFilterPredicate, postFilter?.Values));
 };
 
 export const parseTagArguments = (values: string[]) =>

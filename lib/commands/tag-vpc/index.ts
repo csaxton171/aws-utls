@@ -1,9 +1,9 @@
 import yargs from "yargs";
-import { visitByVpc } from "../../visitor";
+import { STS } from "aws-sdk";
 import { readFileSync } from "fs";
 import { safeLoad } from "js-yaml";
-import { TagCollectorVisitor } from "./TagCollectorVisitor";
-import { plan } from "./plan";
+import { TaggableResource, EntityResource, GenericTag } from "../../common";
+import { apply, current, plan } from "./subcommands";
 
 export type TagSpecification = {
   tags: {
@@ -12,11 +12,19 @@ export type TagSpecification = {
   }[];
 };
 
+export type TagPlan = {
+  type: TaggableResource;
+  changes: TagPlanChange[];
+} & EntityResource;
+
+export type TagPlanChange = { action: "apply" } & GenericTag;
+
 type TagVpcConfig = {
   command: "current" | "plan" | "apply";
   vpcId: string;
   region: string;
   tagSpec: TagSpecification;
+  tagPlan?: TagPlan[];
 };
 
 export const command = "tag-vpc <command>";
@@ -32,8 +40,7 @@ export const builder = () =>
     .options({
       "vpc-id": {
         describe: "vpc id to start the crawl with",
-        type: "string",
-        demandOption: true
+        type: "string"
       },
       "tag-spec": {
         describe:
@@ -53,51 +60,61 @@ export const builder = () =>
     })
     .check(config => {
       [
+        { commands: ["current", "plan"], optionName: "vpc-id" },
         { commands: ["plan"], optionName: "tag-spec" },
         { commands: ["apply"], optionName: "tag-plan" }
       ].forEach(({ commands, optionName }) => {
         if (commands.includes(config.command!) && !config[optionName]) {
-          throw new Error(
-            `'${config.command}' requires --${optionName} be supplied`
-          );
+          throw new Error(`Missing required argument: ${optionName}`);
         }
       });
       return true;
     })
     .coerce({
-      tagSpec: (value: string) => {
-        if (/ya?ml$/im.test(`${value}`.trim())) {
-          return safeLoad(readFileSync(value, "utf-8"));
-        }
-        throw new Error(`expected path to yaml tag-spec file [${value}]`);
-      },
-      tagPlan: (value: string) => {
-        if (/\.json$/im.test(`${value}`.trim())) {
-          return JSON.parse(readFileSync(value, "utf-8"));
-        }
-        throw new Error(`expected path to json tag plan file [${value}]`);
-      }
+      tagSpec: toTagSpec,
+      tagPlan: toTagPlan
     });
 
 export const handler = async (argv: TagVpcConfig) => {
-  console.log(JSON.stringify(argv, null, 2));
-  const visitor = new TagCollectorVisitor(argv.region);
-  const result = await visitByVpc(argv.vpcId, visitor);
+  const accountInfo = await getAccountInfo(argv.region);
 
   switch (argv.command) {
     case "current":
-      dump(result);
+      dump(await current(argv.vpcId, accountInfo));
       break;
 
     case "plan":
-      dump(plan(argv.tagSpec, visitor.result));
+      dump(await plan(argv.tagSpec, argv.vpcId, accountInfo));
       break;
 
     case "apply":
-      throw new Error("command not implemented");
+      dump(await apply(argv.tagPlan));
       break;
   }
 };
 
 const dump = (value: object, label?: string) =>
   console.log(label || "", JSON.stringify(value, null, 2));
+
+const getAccountInfo = (region: string) =>
+  new STS()
+    .getCallerIdentity()
+    .promise()
+    .then(res => {
+      const { Account: account, Arn: userArn } = res;
+      return { region: region, account, userArn };
+    });
+
+const toTagSpec = (value: string) => {
+  if (/ya?ml$/im.test(`${value}`.trim())) {
+    return safeLoad(readFileSync(value, "utf-8")) as TagSpecification;
+  }
+  throw new Error(`expected path to yaml tag-spec file [${value}]`);
+};
+
+const toTagPlan = (value: string) => {
+  if (/\.json$/im.test(`${value}`.trim())) {
+    return JSON.parse(readFileSync(value, "utf-8")) as TagPlan[];
+  }
+  throw new Error(`expected path to json tag plan file [${value}]`);
+};

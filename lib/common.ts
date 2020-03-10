@@ -1,8 +1,31 @@
 import { EC2, RDS } from "aws-sdk";
-import { partial, partition, propEq, curry } from "rambdax";
+import { partial, partition, propEq } from "rambdax";
+
+export type EntityResource = {
+  resourceId: string;
+  resourceArn?: string;
+};
 
 export type GenericTag = { Key: string; Value: string };
 export type GenericTaggedResource = { tags: GenericTag[] };
+export type TaggableResource =
+  | "Address"
+  | "EgressOnlyInternetGateway"
+  | "Instance"
+  | "InternetGateway"
+  | "NatGateway"
+  | "NetworkAcl"
+  | "NetworkInterface"
+  | "RdsDBCluster"
+  | "RdsDBInstance"
+  | "RouteTable"
+  | "SecurityGroup"
+  | "Snapshot"
+  | "Subnet"
+  | "Volume"
+  | "Vpc"
+  | "VpcEndpoint"
+  | "VpcPeeringConnection";
 
 export const getVpcs = async (ec2: EC2, filters: EC2.FilterList) => {
   return (await ec2.describeVpcs({ Filters: filters }).promise()).Vpcs || [];
@@ -213,5 +236,20 @@ export const parseTagArguments = (values: string[]) =>
     return { Key: cleanTagElement(key), Value: cleanTagElement(value) };
   });
 
-const cleanTagElement = (value: string) =>
+export const cleanTagElement = (value: string) =>
   `${value}`.replace(/^['"\s]*|['\s"]*$/, "");
+
+export const noArn = () => undefined;
+
+export const toArn = (
+  service: string,
+  region: string,
+  account: string,
+  resourceType: string,
+  getResourceId: (subject: object) => string
+) => (subject: any) =>
+  `arn:aws:${service}:${region}:${account}:${resourceType}/${getResourceId(
+    subject
+  )}`;
+
+export const toEc2Arn = partial(toArn, "ec2");

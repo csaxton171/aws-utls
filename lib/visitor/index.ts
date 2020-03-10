@@ -4,28 +4,29 @@ import { GenericTaggedResource } from "../common";
 
 type vistSubjectFn<T> = (subject: T) => Promise<void>;
 
+// TODO split this out
 export interface Visitor {
-  visitVpc?: vistSubjectFn<EC2.Vpc>;
-  visitSubnets?: vistSubjectFn<EC2.Subnet[]>;
-  visitRouteTables?: vistSubjectFn<EC2.RouteTable[]>;
-  visitInternetGateways?: vistSubjectFn<EC2.InternetGateway[]>;
+  visitAddresses?: vistSubjectFn<EC2.Address[]>;
   visitEgressOnlyInternetGateways?: vistSubjectFn<
     EC2.EgressOnlyInternetGateway[]
   >;
-  visitVpcEndpoints?: vistSubjectFn<EC2.VpcEndpoint[]>;
-  visitNatGateways?: vistSubjectFn<EC2.NatGateway[]>;
-  visitVpcPeeringConnections?: vistSubjectFn<EC2.VpcPeeringConnection[]>;
-  visitNetworkAcls?: vistSubjectFn<EC2.NetworkAcl[]>;
-  visitSecurityGroups?: vistSubjectFn<EC2.SecurityGroup[]>;
   visitInstances?: vistSubjectFn<EC2.Instance[]>;
-  visitVolumes?: vistSubjectFn<EC2.Volume[]>;
-  visitSnapshots?: vistSubjectFn<EC2.Snapshot[]>;
+  visitInternetGateways?: vistSubjectFn<EC2.InternetGateway[]>;
+  visitNatGateways?: vistSubjectFn<EC2.NatGateway[]>;
+  visitNetworkAcls?: vistSubjectFn<EC2.NetworkAcl[]>;
   visitNetworkInterfaces?: vistSubjectFn<EC2.NetworkInterface[]>;
-  visitAddresses?: vistSubjectFn<EC2.Address[]>;
   visitRdsDBClusters?: vistSubjectFn<(RDS.DBCluster & GenericTaggedResource)[]>;
   visitRdsDBInstances?: vistSubjectFn<
     (RDS.DBInstance & GenericTaggedResource)[]
   >;
+  visitRouteTables?: vistSubjectFn<EC2.RouteTable[]>;
+  visitSecurityGroups?: vistSubjectFn<EC2.SecurityGroup[]>;
+  visitSnapshots?: vistSubjectFn<EC2.Snapshot[]>;
+  visitSubnets?: vistSubjectFn<EC2.Subnet[]>;
+  visitVolumes?: vistSubjectFn<EC2.Volume[]>;
+  visitVpc?: vistSubjectFn<EC2.Vpc>;
+  visitVpcEndpoints?: vistSubjectFn<EC2.VpcEndpoint[]>;
+  visitVpcPeeringConnections?: vistSubjectFn<EC2.VpcPeeringConnection[]>;
 }
 
 export type VisitResult = {

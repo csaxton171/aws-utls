@@ -102,3 +102,8 @@ junit.xml
 .DS_Store
 
 *.csv
+
+# ignore tagspec and tagplan file
+*.tag*.yaml
+*.tag*.yml
+*.tag*.json

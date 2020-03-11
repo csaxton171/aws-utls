@@ -57,7 +57,7 @@ export const builder = () =>
         describe:
           "used to test whether an plan application would successfully complete without mutating actual state",
         type: "boolean",
-        default: true /* TODO change this to false later */
+        default: false
       },
       region: {
         describe: "aws region",

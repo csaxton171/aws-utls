@@ -1,4 +1,4 @@
-import { EC2, RDS, Lambda } from "aws-sdk";
+import { EC2, RDS, Lambda, ElastiCache } from "aws-sdk";
 import { Visitor } from "../../visitor";
 import { prop, curry } from "rambdax";
 import {
@@ -9,6 +9,8 @@ import {
   noArn
 } from "../../common";
 import { TagCollectionItem } from "./TagCollectionItem";
+import { toElastiCacheArn } from "../../common";
+
 export class TagCollectorVisitor implements Visitor {
   private readonly collected: TagCollectionItem[];
   private readonly region: string;
@@ -234,6 +236,25 @@ export class TagCollectorVisitor implements Visitor {
       ...subjects.map(
         toTagCollectionItem("LambdaFunction")(prop("FunctionName"))(
           prop("FunctionArn")
+        )
+      )
+    );
+    return Promise.resolve();
+  }
+  visitElastiCacheCacheCluster(
+    subjects: (ElastiCache.CacheCluster & GenericTaggedResource)[]
+  ) {
+    const toElastiCacheClusterArn = toElastiCacheArn(
+      this.region,
+      this.accountId,
+      "cluster",
+      prop("CacheClusterId")
+    );
+
+    this.collected.push(
+      ...subjects.map(
+        toTagCollectionItem("ElastiCacheCluster")(prop("CacheClusterId"))(
+          toElastiCacheClusterArn
         )
       )
     );

@@ -1,28 +1,7 @@
-import { EC2, RDS, Lambda } from "aws-sdk";
-import {
-  partial,
-  partition,
-  propEq,
-  ifElse,
-  compose,
-  T,
-  find,
-  isNil,
-  curry,
-  toPairs,
-  map,
-  defaultTo
-} from "rambdax";
+import { EC2, RDS } from "aws-sdk";
+import { partition, partial, propEq } from "rambdax";
 
-export type EntityResource = {
-  resourceId: string;
-  resourceArn?: string;
-};
-
-export type GenericFilter = { Name: string; Values: string[] };
-export type GenericTag = { Key: string; Value: string };
-export type GenericTaggedResource = { tags: GenericTag[] };
-export type TaggableResource =
+export type TaggableEc2Resource =
   | "Address"
   | "EgressOnlyInternetGateway"
   | "Instance"
@@ -30,8 +9,6 @@ export type TaggableResource =
   | "NatGateway"
   | "NetworkAcl"
   | "NetworkInterface"
-  | "RdsDBCluster"
-  | "RdsDBInstance"
   | "RouteTable"
   | "SecurityGroup"
   | "Snapshot"
@@ -39,30 +16,10 @@ export type TaggableResource =
   | "Volume"
   | "Vpc"
   | "VpcEndpoint"
-  | "VpcPeeringConnection"
-  | "LambdaFunction";
+  | "VpcPeeringConnection";
 
 export const getVpcs = async (ec2: EC2, filters: EC2.FilterList) => {
   return (await ec2.describeVpcs({ Filters: filters }).promise()).Vpcs || [];
-};
-
-const filterBy = (byField: string, values: string[]) => [
-  { Name: byField, Values: values }
-];
-export const filterByVpc = partial(filterBy, "vpc-id");
-export const filterBySnapshotId = partial(filterBy, "snapshot-id");
-export const filterByVolumeId = partial(filterBy, "volume-id");
-export const filterByInstanceId = partial(filterBy, "instance-id");
-export const filterByStatus = partial(filterBy, "status");
-
-export const filterByRdsClusterId = (dbInstances: RDS.DBInstance[]) => {
-  const clusterIds = dbInstances
-    .filter(dbi => dbi.DBClusterIdentifier)
-    .map(dbi => dbi.DBClusterIdentifier!);
-  return {
-    Name: "db-cluster-id",
-    Values: clusterIds.length ? clusterIds : ["no-db-cluster-specified"]
-  };
 };
 
 export const getSubnets = async (ec2: EC2, filters: EC2.FilterList) => {
@@ -186,87 +143,7 @@ export const getAddresses = async (ec2: EC2, filters: EC2.FilterList) => {
   );
 };
 
-export const getRdsDBClusters = async (rds: RDS, filters: RDS.FilterList) => {
-  return (
-    (await rds.describeDBClusters({ Filters: filters }).promise()).DBClusters ||
-    []
-  );
-};
-
-export const getRdsDBInstances = async (rds: RDS, filters: RDS.FilterList) => {
-  return applyPostFilters(
-    async filters =>
-      (
-        await rds
-          .describeDBInstances({
-            Filters: filters
-          })
-          .promise()
-      ).DBInstances || [],
-    filters,
-    [
-      "vpc-id",
-      (values, dbi: RDS.DBInstance) =>
-        values.includes(dbi.DBSubnetGroup?.VpcId || "")
-    ]
-  );
-};
-
-export const getLambdaFunctions = async (
-  lambda: Lambda,
-  filters: GenericFilter[]
-) => {
-  const functions = (await lambda.listFunctions({}).promise()).Functions || [];
-
-  const vpcFilter = compose(
-    (fltr: GenericFilter | undefined) =>
-      ifElse(isNil, T, onlyVpcFunctions(fltr!.Values)),
-    find(propEq("Name", "vpc-id"))
-  )(filters);
-
-  return functions.filter(vpcFilter);
-};
-
-const onlyVpcFunctions = curry(
-  (vpcIds: string[], f: Lambda.FunctionConfiguration) =>
-    vpcIds.includes(f.VpcConfig?.VpcId || "")
-);
-
-export const withRdsTags = <T>(
-  rds: RDS,
-  getResourceArn: (args?: any) => string,
-  resources: T[]
-) =>
-  Promise.all(
-    resources.map(async res => {
-      const rtags = await rds
-        .listTagsForResource({ ResourceName: getResourceArn(res) })
-        .promise();
-      return { ...res, tags: (rtags.TagList as GenericTag[]) || [] };
-    })
-  );
-
-export const withLambdaTags = <T>(
-  lambda: Lambda,
-  getResourceArn: (args?: any) => string,
-  resources: T[]
-) =>
-  Promise.all(
-    resources.map(async res => {
-      const rtags = await lambda
-        .listTags({ Resource: getResourceArn(res) })
-        .promise();
-      return {
-        ...res,
-        tags: Object.entries(rtags?.Tags || {}).map(([k, v]) => ({
-          Key: k,
-          Value: v
-        })) as GenericTag[]
-      };
-    })
-  );
-
-const applyPostFilters = async <
+export const applyPostFilters = async <
   FL extends EC2.FilterList | RDS.FilterList,
   T extends object
 >(
@@ -284,27 +161,3 @@ const applyPostFilters = async <
 
   return results.filter(partial(postFilterPredicate, postFilter?.Values));
 };
-
-export const parseTagArguments = (values: string[]) =>
-  values.map(kvp => {
-    const [key, value] = kvp.split("=");
-    return { Key: cleanTagElement(key), Value: cleanTagElement(value) };
-  });
-
-export const cleanTagElement = (value: string) =>
-  `${value}`.replace(/^['"\s]*|['\s"]*$/, "");
-
-export const noArn = () => undefined;
-
-export const toArn = (
-  service: string,
-  region: string,
-  account: string,
-  resourceType: string,
-  getResourceId: (subject: object) => string
-) => (subject: any) =>
-  `arn:aws:${service}:${region}:${account}:${resourceType}/${getResourceId(
-    subject
-  )}`;
-
-export const toEc2Arn = partial(toArn, "ec2");

@@ -12,7 +12,7 @@ import {
 } from "rambdax";
 import { lensProp, set } from "rambda";
 import { parseArnString } from "../../../arn";
-import { EC2, RDS, Lambda } from "aws-sdk";
+import { EC2, RDS, Lambda, ElastiCache } from "aws-sdk";
 
 type ApplyTags = (plans: TagPlan[]) => Promise<TagPlanResult[]>;
 
@@ -41,7 +41,8 @@ export const apply = async (
   const applyTagMapping = new Map<string, ApplyTags>([
     ["ec2", applyTagsEc2(new EC2({ region }))(dryRun)],
     ["rds", applyTagsRds(new RDS({ region }))(dryRun)],
-    ["lambda", applyTagsLambda(new Lambda({ region }))(dryRun)]
+    ["lambda", applyTagsLambda(new Lambda({ region }))(dryRun)],
+    ["elasticache", applyTagsElastiCache(new ElastiCache({ region }))(dryRun)]
   ]);
 
   const servicePlans = compose(Object.entries, groupBy(serviceGrouping))(plan);
@@ -163,6 +164,28 @@ const applyTagsLambda = curry(
                     set(lensProp(change.Key), change.Value, tags),
                   {}
                 )
+              })
+              .promise()
+              .then(() => toTagPlanResults(plan, { status: "success" }))
+              .catch(error => toTagPlanResults(plan, { status: "fail", error }))
+      )
+    ).then(res => res.flat());
+  }
+);
+
+const applyTagsElastiCache = curry(
+  (elasticache: ElastiCache, dryRun: boolean, plans: TagPlan[]) => {
+    return Promise.all(
+      plans.map(plan =>
+        dryRun
+          ? toTagPlanResults(plan, {
+              status: "unknown",
+              error: new Error("dry-run not supported in ElastiCache")
+            })
+          : elasticache
+              .addTagsToResource({
+                ResourceName: plan.resourceArn!,
+                Tags: plan.changes.map(pick(["Key", "Value"]))
               })
               .promise()
               .then(() => toTagPlanResults(plan, { status: "success" }))

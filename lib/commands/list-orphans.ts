@@ -18,10 +18,8 @@ import {
   getVolumes,
   getInstances,
   getSnapshots,
-  getVpcs,
   filterByInstanceId,
-  filterBySnapshotId,
-  filterByVpc
+  filterBySnapshotId
 } from "../common";
 
 type ListOrphanVolumesConfig = {

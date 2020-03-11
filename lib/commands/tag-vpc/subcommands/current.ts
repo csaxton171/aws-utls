@@ -10,5 +10,5 @@ export const current = (options: CurrentOptions): Promise<VisitResult[]> => {
     options.accountInfo.region,
     options.accountInfo.account
   );
-  return visitByVpc(options.vpcId, visitor);
+  return visitByVpc({ ...options }, visitor);
 };

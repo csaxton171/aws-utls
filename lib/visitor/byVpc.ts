@@ -1,5 +1,5 @@
 import { Visitor, VisitResult, safeVisit } from "./index";
-import { EC2, RDS, Lambda } from "aws-sdk";
+import { EC2, RDS, Lambda, ElastiCache } from "aws-sdk";
 import {
   getAddresses,
   getEgressOnlyInternetGateways,
@@ -23,21 +23,39 @@ import {
   filterByInstanceId,
   filterByVolumeId,
   filterByRdsClusterId,
+  filterByElastiCacheSubnetGroupName,
   withRdsTags,
-  withLambdaTags
+  withLambdaTags,
+  getElasticCacheSubnetGroups,
+  getElasticCacheClusters
 } from "../common";
 import { prop } from "rambdax";
+import { withElastiCacheTags, toElastiCacheArn } from "../common/elasticache";
 
+type VisitByVpcOptions = {
+  accountInfo: { account: string | undefined; region: string };
+  vpcId: string;
+};
 export const visitByVpc = async (
-  vpcId: string,
-  visitor: Visitor,
-  region?: string
+  options: VisitByVpcOptions,
+  visitor: Visitor
 ): Promise<VisitResult[]> => {
+  const {
+    vpcId,
+    accountInfo: { account, region }
+  } = options;
   const byVpc = filterByVpc([vpcId]);
   const byVpcAttachment = [{ Name: "attachment.vpc-id", Values: [vpcId] }];
   const ec2 = new EC2({ region: region || "eu-west-1" });
   const rds = new RDS({ region: region || "eu-west-1" });
   const lambda = new Lambda({ region: region || "eu-west-1" });
+  const elasticache = new ElastiCache({ region: region || "eu-west-1" });
+  const toElastiCacheClusterArn = toElastiCacheArn(
+    region,
+    account,
+    "cluster",
+    prop("CacheClusterId")
+  );
 
   const [vpc] = await getVpcs(ec2, byVpc);
   if (!vpc) {
@@ -74,7 +92,8 @@ export const visitByVpc = async (
     networkInterfaces,
     addresses,
     rdsDbInstances,
-    lambdFunctions
+    lambdFunctions,
+    elastiCacheSubnetGroups
   ] = await Promise.all([
     getNetworkInterfaces(ec2, byVpc),
     getAddresses(ec2, filterByInstanceId(instances.map(i => i.InstanceId!))),
@@ -83,13 +102,20 @@ export const visitByVpc = async (
     ),
     getLambdaFunctions(lambda, byVpc).then(functions =>
       withLambdaTags(lambda, prop("FunctionArn"), functions)
-    )
+    ),
+    getElasticCacheSubnetGroups(elasticache, byVpc)
   ]);
 
-  const [rdsDBClusters] = await Promise.all([
+  const [rdsDBClusters, elastiCacheClusters] = await Promise.all([
     getRdsDBClusters(rds, [
       filterByRdsClusterId(rdsDbInstances)
-    ]).then(clusters => withRdsTags(rds, prop("DBClusterArn"), clusters))
+    ]).then(clusters => withRdsTags(rds, prop("DBClusterArn"), clusters)),
+    getElasticCacheClusters(
+      elasticache,
+      filterByElastiCacheSubnetGroupName(
+        elastiCacheSubnetGroups.map(e => e?.CacheSubnetGroupName!)
+      )
+    ).then(withElastiCacheTags(elasticache, toElastiCacheClusterArn))
   ]);
 
   const volumeIds = instances
@@ -131,7 +157,12 @@ export const visitByVpc = async (
       safeVisit(visitor)(rdsDbInstances, visitor.visitRdsDBInstances),
       safeVisit(visitor)(rdsDBClusters, visitor.visitRdsDBClusters),
 
-      safeVisit(visitor)(lambdFunctions, visitor.visitLambdaFunctions)
+      safeVisit(visitor)(lambdFunctions, visitor.visitLambdaFunctions),
+
+      safeVisit(visitor)(
+        elastiCacheClusters,
+        visitor.visitElastiCacheCacheCluster
+      )
     ])
   ).filter(res => res.func);
 };

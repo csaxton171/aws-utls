@@ -1,4 +1,4 @@
-import { EC2, RDS, Lambda } from "aws-sdk";
+import { EC2, RDS, Lambda, ElastiCache } from "aws-sdk";
 import { performance } from "perf_hooks";
 import { GenericTaggedResource } from "../common";
 
@@ -29,6 +29,9 @@ export interface Visitor {
   visitVpcPeeringConnections?: vistSubjectFn<EC2.VpcPeeringConnection[]>;
   visitLambdaFunctions?: vistSubjectFn<
     (Lambda.FunctionConfiguration & GenericTaggedResource)[]
+  >;
+  visitElastiCacheCacheCluster?: vistSubjectFn<
+    (ElastiCache.CacheCluster & GenericTaggedResource)[]
   >;
 }
 

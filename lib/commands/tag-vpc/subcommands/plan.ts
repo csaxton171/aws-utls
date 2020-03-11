@@ -21,7 +21,7 @@ export const plan = async (options: PlanOptions, tagSpec: TagSpecification) => {
     options.accountInfo.region,
     options.accountInfo.account
   );
-  await visitByVpc(options.vpcId, visitor);
+  await visitByVpc({ ...options }, visitor);
   const desiredTags: GenericTag[] = tagSpec.tags.map(t => ({
     Key: t.key,
     Value: `${t.value}`
@@ -44,10 +44,12 @@ const planFormatJson = (
   tagCollectionItems: TagCollectionItem[],
   desiredTags: GenericTag[]
 ) =>
-  tagCollectionItems.map(subject => ({
-    ...pick(["resourceId", "resourceArn", "type"], subject),
-    changes: difference(desiredTags, subject.tags).map(entry => ({
-      ...entry,
-      action: "apply"
+  tagCollectionItems
+    .map(subject => ({
+      ...pick(["resourceId", "resourceArn", "type"], subject),
+      changes: difference(desiredTags, subject.tags).map(entry => ({
+        ...entry,
+        action: "apply"
+      }))
     }))
-  }));
+    .filter(plan => plan.changes.length > 0);

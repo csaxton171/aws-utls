@@ -1,12 +1,14 @@
 import { TagCollectorVisitor } from "../TagCollectorVisitor";
 import { visitByVpc, VisitResult } from "../../../visitor";
-export const current = (
-  vpcId: string,
-  accountInfo: { account: string | undefined; region: string }
-): Promise<VisitResult[]> => {
+
+type CurrentOptions = {
+  accountInfo: { account: string | undefined; region: string };
+  vpcId: string;
+};
+export const current = (options: CurrentOptions): Promise<VisitResult[]> => {
   const visitor = new TagCollectorVisitor(
-    accountInfo.region,
-    accountInfo.account
+    options.accountInfo.region,
+    options.accountInfo.account
   );
-  return visitByVpc(vpcId, visitor);
+  return visitByVpc(options.vpcId, visitor);
 };

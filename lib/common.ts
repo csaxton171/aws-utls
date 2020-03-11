@@ -1,11 +1,25 @@
-import { EC2, RDS } from "aws-sdk";
-import { partial, partition, propEq } from "rambdax";
+import { EC2, RDS, Lambda } from "aws-sdk";
+import {
+  partial,
+  partition,
+  propEq,
+  ifElse,
+  compose,
+  T,
+  find,
+  isNil,
+  curry,
+  toPairs,
+  map,
+  defaultTo
+} from "rambdax";
 
 export type EntityResource = {
   resourceId: string;
   resourceArn?: string;
 };
 
+export type GenericFilter = { Name: string; Values: string[] };
 export type GenericTag = { Key: string; Value: string };
 export type GenericTaggedResource = { tags: GenericTag[] };
 export type TaggableResource =
@@ -25,7 +39,8 @@ export type TaggableResource =
   | "Volume"
   | "Vpc"
   | "VpcEndpoint"
-  | "VpcPeeringConnection";
+  | "VpcPeeringConnection"
+  | "LambdaFunction";
 
 export const getVpcs = async (ec2: EC2, filters: EC2.FilterList) => {
   return (await ec2.describeVpcs({ Filters: filters }).promise()).Vpcs || [];
@@ -197,6 +212,26 @@ export const getRdsDBInstances = async (rds: RDS, filters: RDS.FilterList) => {
   );
 };
 
+export const getLambdaFunctions = async (
+  lambda: Lambda,
+  filters: GenericFilter[]
+) => {
+  const functions = (await lambda.listFunctions({}).promise()).Functions || [];
+
+  const vpcFilter = compose(
+    (fltr: GenericFilter | undefined) =>
+      ifElse(isNil, T, onlyVpcFunctions(fltr!.Values)),
+    find(propEq("Name", "vpc-id"))
+  )(filters);
+
+  return functions.filter(vpcFilter);
+};
+
+const onlyVpcFunctions = curry(
+  (vpcIds: string[], f: Lambda.FunctionConfiguration) =>
+    vpcIds.includes(f.VpcConfig?.VpcId || "")
+);
+
 export const withRdsTags = <T>(
   rds: RDS,
   getResourceArn: (args?: any) => string,
@@ -208,6 +243,26 @@ export const withRdsTags = <T>(
         .listTagsForResource({ ResourceName: getResourceArn(res) })
         .promise();
       return { ...res, tags: (rtags.TagList as GenericTag[]) || [] };
+    })
+  );
+
+export const withLambdaTags = <T>(
+  lambda: Lambda,
+  getResourceArn: (args?: any) => string,
+  resources: T[]
+) =>
+  Promise.all(
+    resources.map(async res => {
+      const rtags = await lambda
+        .listTags({ Resource: getResourceArn(res) })
+        .promise();
+      return {
+        ...res,
+        tags: Object.entries(rtags?.Tags || {}).map(([k, v]) => ({
+          Key: k,
+          Value: v
+        })) as GenericTag[]
+      };
     })
   );
 

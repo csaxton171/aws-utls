@@ -1,5 +1,5 @@
 import { Visitor, VisitResult, safeVisit } from "./index";
-import { EC2, RDS } from "aws-sdk";
+import { EC2, RDS, Lambda } from "aws-sdk";
 import {
   getAddresses,
   getEgressOnlyInternetGateways,
@@ -18,11 +18,13 @@ import {
   getVpcEndpoints,
   getVpcPeeringConnections,
   getVpcs,
+  getLambdaFunctions,
   filterByVpc,
   filterByInstanceId,
   filterByVolumeId,
   filterByRdsClusterId,
-  withRdsTags
+  withRdsTags,
+  withLambdaTags
 } from "../common";
 import { prop } from "rambdax";
 
@@ -35,6 +37,7 @@ export const visitByVpc = async (
   const byVpcAttachment = [{ Name: "attachment.vpc-id", Values: [vpcId] }];
   const ec2 = new EC2({ region: region || "eu-west-1" });
   const rds = new RDS({ region: region || "eu-west-1" });
+  const lambda = new Lambda({ region: region || "eu-west-1" });
 
   const [vpc] = await getVpcs(ec2, byVpc);
   if (!vpc) {
@@ -67,11 +70,19 @@ export const visitByVpc = async (
     getInstances(ec2, byVpc)
   ]);
 
-  const [networkInterfaces, addresses, rdsDbInstances] = await Promise.all([
+  const [
+    networkInterfaces,
+    addresses,
+    rdsDbInstances,
+    lambdFunctions
+  ] = await Promise.all([
     getNetworkInterfaces(ec2, byVpc),
     getAddresses(ec2, filterByInstanceId(instances.map(i => i.InstanceId!))),
     getRdsDBInstances(rds, byVpc).then(instances =>
       withRdsTags(rds, prop("DBInstanceArn"), instances)
+    ),
+    getLambdaFunctions(lambda, byVpc).then(functions =>
+      withLambdaTags(lambda, prop("FunctionArn"), functions)
     )
   ]);
 
@@ -118,7 +129,9 @@ export const visitByVpc = async (
       safeVisit(visitor)(addresses, visitor.visitAddresses),
 
       safeVisit(visitor)(rdsDbInstances, visitor.visitRdsDBInstances),
-      safeVisit(visitor)(rdsDBClusters, visitor.visitRdsDBClusters)
+      safeVisit(visitor)(rdsDBClusters, visitor.visitRdsDBClusters),
+
+      safeVisit(visitor)(lambdFunctions, visitor.visitLambdaFunctions)
     ])
   ).filter(res => res.func);
 };

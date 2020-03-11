@@ -1,4 +1,4 @@
-import { EC2, RDS } from "aws-sdk";
+import { EC2, RDS, Lambda } from "aws-sdk";
 import { Visitor } from "../../visitor";
 import { prop, curry } from "rambdax";
 import {
@@ -222,6 +222,18 @@ export class TagCollectorVisitor implements Visitor {
       ...subjects.map(
         toTagCollectionItem("RdsDBCluster")(prop("DBClusterIdentifier"))(
           prop("DBClusterArn")
+        )
+      )
+    );
+    return Promise.resolve();
+  }
+  visitLambdaFunctions(
+    subjects: (Lambda.FunctionConfiguration & GenericTaggedResource)[]
+  ) {
+    this.collected.push(
+      ...subjects.map(
+        toTagCollectionItem("LambdaFunction")(prop("FunctionName"))(
+          prop("FunctionArn")
         )
       )
     );

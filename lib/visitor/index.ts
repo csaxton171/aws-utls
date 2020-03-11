@@ -1,4 +1,4 @@
-import { EC2, RDS } from "aws-sdk";
+import { EC2, RDS, Lambda } from "aws-sdk";
 import { performance } from "perf_hooks";
 import { GenericTaggedResource } from "../common";
 
@@ -27,6 +27,9 @@ export interface Visitor {
   visitVpc?: vistSubjectFn<EC2.Vpc>;
   visitVpcEndpoints?: vistSubjectFn<EC2.VpcEndpoint[]>;
   visitVpcPeeringConnections?: vistSubjectFn<EC2.VpcPeeringConnection[]>;
+  visitLambdaFunctions?: vistSubjectFn<
+    (Lambda.FunctionConfiguration & GenericTaggedResource)[]
+  >;
 }
 
 export type VisitResult = {

@@ -10,8 +10,9 @@ import {
   length,
   map
 } from "rambdax";
+import { lensProp, set } from "rambda";
 import { parseArnString } from "../../../arn";
-import { EC2, RDS } from "aws-sdk";
+import { EC2, RDS, Lambda } from "aws-sdk";
 
 type ApplyTags = (plans: TagPlan[]) => Promise<TagPlanResult[]>;
 
@@ -39,7 +40,8 @@ export const apply = async (
 
   const applyTagMapping = new Map<string, ApplyTags>([
     ["ec2", applyTagsEc2(new EC2({ region }))(dryRun)],
-    ["rds", applyTagsRds(new RDS({ region }))(dryRun)]
+    ["rds", applyTagsRds(new RDS({ region }))(dryRun)],
+    ["lambda", applyTagsLambda(new Lambda({ region }))(dryRun)]
   ]);
 
   const servicePlans = compose(Object.entries, groupBy(serviceGrouping))(plan);
@@ -143,6 +145,32 @@ const applyTagsRds = curry((rds: RDS, dryRun: boolean, plans: TagPlan[]) => {
     )
   ).then(res => res.flat());
 });
+
+const applyTagsLambda = curry(
+  (lambda: Lambda, dryRun: boolean, plans: TagPlan[]) => {
+    return Promise.all(
+      plans.map(plan =>
+        dryRun
+          ? toTagPlanResults(plan, {
+              status: "unknown",
+              error: new Error("dry-run not supported in Lambda")
+            })
+          : lambda
+              .tagResource({
+                Resource: plan.resourceArn!,
+                Tags: plan.changes.reduce(
+                  (tags, change) =>
+                    set(lensProp(change.Key), change.Value, tags),
+                  {}
+                )
+              })
+              .promise()
+              .then(() => toTagPlanResults(plan, { status: "success" }))
+              .catch(error => toTagPlanResults(plan, { status: "fail", error }))
+      )
+    ).then(res => res.flat());
+  }
+);
 
 const toTagPlanResults = (
   plan: TagPlan,

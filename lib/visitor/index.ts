@@ -1,4 +1,4 @@
-import { EC2, RDS, Lambda, ElastiCache } from "aws-sdk";
+import { EC2, RDS, Lambda, ElastiCache, ELB } from "aws-sdk";
 import { performance } from "perf_hooks";
 import { GenericTaggedResource } from "../common";
 
@@ -30,8 +30,11 @@ export interface Visitor {
   visitLambdaFunctions?: vistSubjectFn<
     (Lambda.FunctionConfiguration & GenericTaggedResource)[]
   >;
-  visitElastiCacheCacheCluster?: vistSubjectFn<
+  visitElastiCacheCacheClusters?: vistSubjectFn<
     (ElastiCache.CacheCluster & GenericTaggedResource)[]
+  >;
+  visitElbClassicLoadBalancers?: vistSubjectFn<
+    (ELB.LoadBalancerDescription & GenericTaggedResource)[]
   >;
 }
 

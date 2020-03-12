@@ -1,8 +1,9 @@
 import { Visitor, VisitResult, safeVisit } from "./index";
-import { EC2, RDS, Lambda, ElastiCache } from "aws-sdk";
+import { EC2, RDS, Lambda, ElastiCache, ELB } from "aws-sdk";
 import {
   getAddresses,
   getEgressOnlyInternetGateways,
+  getElbClassicLoadBalancers,
   getInstances,
   getInternetGateways,
   getNatGateways,
@@ -24,6 +25,7 @@ import {
   filterByVolumeId,
   filterByRdsClusterId,
   filterByElastiCacheSubnetGroupName,
+  withElbClassicLoadBalancerTags,
   withRdsTags,
   withLambdaTags,
   getElasticCacheSubnetGroups,
@@ -50,6 +52,8 @@ export const visitByVpc = async (
   const rds = new RDS({ region: region || "eu-west-1" });
   const lambda = new Lambda({ region: region || "eu-west-1" });
   const elasticache = new ElastiCache({ region: region || "eu-west-1" });
+  const elb = new ELB({ region: region || "eu-west-1" });
+
   const toElastiCacheClusterArn = toElastiCacheArn(
     region,
     account,
@@ -93,7 +97,8 @@ export const visitByVpc = async (
     addresses,
     rdsDbInstances,
     lambdFunctions,
-    elastiCacheSubnetGroups
+    elastiCacheSubnetGroups,
+    elbClassicLoadBalancers
   ] = await Promise.all([
     getNetworkInterfaces(ec2, byVpc),
     getAddresses(ec2, filterByInstanceId(instances.map(i => i.InstanceId!))),
@@ -103,7 +108,10 @@ export const visitByVpc = async (
     getLambdaFunctions(lambda, byVpc).then(functions =>
       withLambdaTags(lambda, prop("FunctionArn"), functions)
     ),
-    getElasticCacheSubnetGroups(elasticache, byVpc)
+    getElasticCacheSubnetGroups(elasticache, byVpc),
+    getElbClassicLoadBalancers(elb, byVpc).then(loadBalancers =>
+      withElbClassicLoadBalancerTags(elb, loadBalancers)
+    )
   ]);
 
   const [rdsDBClusters, elastiCacheClusters] = await Promise.all([
@@ -161,7 +169,11 @@ export const visitByVpc = async (
 
       safeVisit(visitor)(
         elastiCacheClusters,
-        visitor.visitElastiCacheCacheCluster
+        visitor.visitElastiCacheCacheClusters
+      ),
+      safeVisit(visitor)(
+        elbClassicLoadBalancers,
+        visitor.visitElbClassicLoadBalancers
       )
     ])
   ).filter(res => res.func);

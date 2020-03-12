@@ -4,6 +4,7 @@ import { lensProp, set, prop } from "rambda";
 import { TaggableLambdaResource } from "./lambda";
 import { TaggableRdsResource } from "./rds";
 import { TaggableEc2Resource } from "./ec2";
+import { TaggableElbResource } from "./elb";
 import { TaggableElastiCacheResource } from "./elasticache";
 
 export { noArn, toArn, toEc2Arn } from "./arn";
@@ -38,6 +39,11 @@ export {
   getVpcs
 } from "./ec2";
 
+export {
+  getElbClassicLoadBalancers,
+  withElbClassicLoadBalancerTags
+} from "./elb";
+
 export type EntityResource = {
   resourceId: string;
   resourceArn?: string;
@@ -50,7 +56,8 @@ export type TaggableResource =
   | TaggableEc2Resource
   | TaggableRdsResource
   | TaggableLambdaResource
-  | TaggableElastiCacheResource;
+  | TaggableElastiCacheResource
+  | TaggableElbResource;
 
 export const filterBy = (byField: string, values: string[]) => [
   { Name: byField, Values: values }

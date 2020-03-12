@@ -1,6 +1,6 @@
-import { EC2, RDS, Lambda, ElastiCache } from "aws-sdk";
+import { EC2, RDS, Lambda, ElastiCache, ELB } from "aws-sdk";
 import { Visitor } from "../../visitor";
-import { prop, curry } from "rambdax";
+import { prop, propOr, curry } from "rambdax";
 import {
   GenericTaggedResource,
   GenericTag,
@@ -9,7 +9,7 @@ import {
   noArn
 } from "../../common";
 import { TagCollectionItem } from "./TagCollectionItem";
-import { toElastiCacheArn } from "../../common";
+import { toElastiCacheArn, toArn } from "../../common";
 
 export class TagCollectorVisitor implements Visitor {
   private readonly collected: TagCollectionItem[];
@@ -241,7 +241,7 @@ export class TagCollectorVisitor implements Visitor {
     );
     return Promise.resolve();
   }
-  visitElastiCacheCacheCluster(
+  visitElastiCacheCacheClusters(
     subjects: (ElastiCache.CacheCluster & GenericTaggedResource)[]
   ) {
     const toElastiCacheClusterArn = toElastiCacheArn(
@@ -260,13 +260,35 @@ export class TagCollectorVisitor implements Visitor {
     );
     return Promise.resolve();
   }
+
+  visitElbClassicLoadBalancers(
+    subjects: (ELB.LoadBalancerDescription & GenericTaggedResource)[]
+  ) {
+    // arn:aws:elasticloadbalancing:region:account-id:loadbalancer/name
+    const toClassicElbArn = toArn<ELB.LoadBalancerDescription>(
+      "elasticloadbalancing",
+      this.region,
+      this.accountId,
+      "loadbalancer",
+      propOr("", "LoadBalancerName")
+    );
+
+    this.collected.push(
+      ...subjects.map(
+        toTagCollectionItem("ClassicLoadBalancer")(prop("LoadBalancerName"))(
+          toClassicElbArn
+        )
+      )
+    );
+    return Promise.resolve();
+  }
 }
 
 export const toTagCollectionItem = curry(
   <
     T extends {
       tags?: GenericTag[];
-      Tags?: EC2.TagList | RDS.TagList;
+      Tags?: EC2.TagList | RDS.TagList | ELB.TagList;
       TagSet?: EC2.TagList;
     }
   >(

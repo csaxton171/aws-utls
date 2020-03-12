@@ -12,7 +12,7 @@ import {
 } from "rambdax";
 import { lensProp, set } from "rambda";
 import { parseArnString } from "../../../arn";
-import { EC2, RDS, Lambda, ElastiCache } from "aws-sdk";
+import { EC2, RDS, Lambda, ElastiCache, ELB } from "aws-sdk";
 
 type ApplyTags = (plans: TagPlan[]) => Promise<TagPlanResult[]>;
 
@@ -42,7 +42,11 @@ export const apply = async (
     ["ec2", applyTagsEc2(new EC2({ region }))(dryRun)],
     ["rds", applyTagsRds(new RDS({ region }))(dryRun)],
     ["lambda", applyTagsLambda(new Lambda({ region }))(dryRun)],
-    ["elasticache", applyTagsElastiCache(new ElastiCache({ region }))(dryRun)]
+    ["elasticache", applyTagsElastiCache(new ElastiCache({ region }))(dryRun)],
+    [
+      "elasticloadbalancing",
+      applyTagsElbClassicLoadBalancer(new ELB({ region }))(dryRun)
+    ]
   ]);
 
   const servicePlans = compose(Object.entries, groupBy(serviceGrouping))(plan);
@@ -190,6 +194,34 @@ const applyTagsElastiCache = curry(
               .promise()
               .then(() => toTagPlanResults(plan, { status: "success" }))
               .catch(error => toTagPlanResults(plan, { status: "fail", error }))
+      )
+    ).then(res => res.flat());
+  }
+);
+
+const applyTagsElbClassicLoadBalancer = curry(
+  (elb: ELB, dryRun: boolean, plans: readonly TagPlan[]) => {
+    // TODO rewrite this to batch calls and be more efficient across the wire :)
+    return Promise.all(
+      plans.map(plan =>
+        elb
+          .addTags({
+            LoadBalancerNames: [plan.resourceId],
+            Tags: plan.changes.map(
+              c => ({ Key: c.Key, Value: c.Value } as ELB.Tag)
+            )
+          })
+          .promise()
+          .then(() => toTagPlanResults(plan, { status: "success" }))
+          .catch(error => {
+            const state: TagPlanChangeState =
+              error.code === "DryRunOperation" &&
+              /would\shave\ssucceeded/i.test(error.message)
+                ? { status: "success" }
+                : { status: "fail", error };
+
+            return toTagPlanResults(plan, state);
+          })
       )
     ).then(res => res.flat());
   }

@@ -1,5 +1,6 @@
 import { EC2, RDS } from "aws-sdk";
 import { partial, partition, propEq } from "rambdax";
+import { lensProp, set, prop } from "rambda";
 import { TaggableLambdaResource } from "./lambda";
 import { TaggableRdsResource } from "./rds";
 import { TaggableEc2Resource } from "./ec2";
@@ -63,6 +64,61 @@ export const filterByElastiCacheSubnetGroupName = partial(
   filterBy,
   "subnet-group-name"
 );
+
+type AwsPagedFunc = <R extends object>(
+  options: object
+) => {
+  promise: () => Promise<R>;
+};
+
+type NextTokenSpec = {
+  /**
+   * property name of the paginatedFunc's response that holds the next page token
+   */
+  getToken: string;
+  /**
+   * [ use if different from 'getToken' ] property name of the paginatedFunc's options object that contains the next page token
+   */
+  setToken?: string;
+};
+
+/**
+ * automatically pages an AWS function to retrieve all results
+ * @param paginatedFunc native aws function used to retrieve component info - assumed to support paging
+ * @param paginatedFuncOptions native aws function 'options' argument
+ * @param nextTokenSpec specifies which properties contain the 'next page' token and which property to set the 'next page' token during request
+ * @param getPageItems function used to retrieve the paged items from the aws function response object
+ * @param items used during recursive invocation - contains current results
+ */
+export const withAllPages = async <F extends AwsPagedFunc, R extends object>(
+  paginatedFunc: F,
+  paginatedFuncOptions: object,
+  nextTokenSpec: NextTokenSpec,
+  getPageItems: (page: ReturnType<F>) => R[],
+  items?: readonly R[]
+): Promise<R[]> => {
+  const page = await paginatedFunc<ReturnType<F>>(
+    paginatedFuncOptions
+  ).promise();
+  const nextToken = prop(nextTokenSpec.getToken)(page);
+  const results = [...(items || []), ...getPageItems(page)];
+
+  if (!nextToken) {
+    return results;
+  } else {
+    return await withAllPages(
+      paginatedFunc,
+      set(
+        lensProp(nextTokenSpec.setToken || nextTokenSpec.getToken),
+        nextToken,
+        paginatedFuncOptions
+      ),
+      nextTokenSpec,
+      getPageItems,
+      results
+    );
+  }
+};
 
 export const applyPostFilters = async <
   FL extends EC2.FilterList | RDS.FilterList,

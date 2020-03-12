@@ -1,6 +1,7 @@
 import { Lambda } from "aws-sdk";
 import { find, ifElse, isNil, compose, propEq, T, curry } from "rambdax";
-import { GenericFilter, GenericTag } from "./index";
+import { propOr } from "rambda";
+import { GenericFilter, GenericTag, withAllPages } from "./index";
 
 export type TaggableLambdaResource = "LambdaFunction";
 
@@ -8,7 +9,12 @@ export const getLambdaFunctions = async (
   lambda: Lambda,
   filters: GenericFilter[]
 ) => {
-  const functions = (await lambda.listFunctions({}).promise()).Functions || [];
+  const functions = (await withAllPages(
+    lambda.listFunctions.bind(lambda),
+    {},
+    { getToken: "NextMarker", setToken: "Marker" },
+    propOr([], "Functions")
+  )) as Lambda.FunctionConfiguration[];
 
   const vpcFilter = compose(
     (fltr: GenericFilter | undefined) =>

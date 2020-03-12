@@ -107,3 +107,4 @@ junit.xml
 *.tag*.yaml
 *.tag*.yml
 *.tag*.json
+.plans
